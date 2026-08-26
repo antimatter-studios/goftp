@@ -60,10 +60,27 @@ COPY --from=pure-ftpd-build /pure-ftpd /pure-ftpd-implicittls /pure-pw /usr/loca
 # the compose file mounts.
 ARG FTP_USER=goftp
 ARG FTP_PASSWORD=rocks
+
+# The uid the servers run as, and it has to be the uid that owns the
+# bind-mounted testroot on the host.
+#
+# A bind mount carries the host's ownership into the container. If the
+# server runs as somebody else, every write is refused — "550 Permission
+# denied" — while every read works, so listings pass and stores fail.
+#
+# Docker Desktop on macOS hides this by remapping ownership, which is why
+# the suite passed locally and failed on Linux CI. scripts/test-servers.sh
+# passes the real uid; 2000 is only a fallback for a direct compose call.
 ARG FTP_UID=2000
 
-RUN groupadd -g ${FTP_UID} ${FTP_USER} \
-    && useradd -u ${FTP_UID} -g ${FTP_UID} -d /testroot -s /usr/sbin/nologin ${FTP_USER} \
+# The uid may already belong to someone in the base image, and creating
+# the user is not worth failing over when only the number matters.
+RUN if ! getent group ${FTP_UID} >/dev/null; then groupadd -g ${FTP_UID} ${FTP_USER}; fi \
+    && if ! getent passwd ${FTP_UID} >/dev/null; then \
+           useradd -u ${FTP_UID} -g ${FTP_UID} -d /testroot -s /usr/sbin/nologin ${FTP_USER}; \
+       else \
+           usermod -l ${FTP_USER} -d /testroot -s /usr/sbin/nologin "$(getent passwd ${FTP_UID} | cut -d: -f1)"; \
+       fi \
     && mkdir -p /testroot
 
 # A fresh certificate at build time, rather than a key committed to the

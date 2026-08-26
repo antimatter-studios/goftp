@@ -25,7 +25,11 @@ x-server: &server
   build:
     context: .
     dockerfile: Dockerfile
-  image: goftp-test-servers:latest
+    args:
+      # Must match whoever owns the bind-mounted testroot, or every
+      # write is refused. See the note in the Dockerfile.
+      FTP_UID: ${FTP_UID:-2000}
+  image: goftp-test-servers:${FTP_UID:-2000}
   volumes:
     # The suite writes into this and expects to see the tree the
     # repository ships. Bound rather than copied so a test that leaves

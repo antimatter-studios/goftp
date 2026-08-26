@@ -45,6 +45,12 @@ go_version() {
     echo "${GO_VERSION:-$GO_DEFAULT}"
 }
 
+# The servers must run as whoever owns testroot on this machine, because
+# a bind mount carries the host's ownership in. Anything else and writes
+# are refused while reads succeed, which reads as a protocol fault rather
+# than a permissions one.
+export FTP_UID="${FTP_UID:-$(id -u)}"
+
 case "${1:-test}" in
     up)
         GO_VERSION="$(go_version)" docker compose -f "$compose" up -d --build
