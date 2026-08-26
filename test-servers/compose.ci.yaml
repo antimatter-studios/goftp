@@ -1,0 +1,33 @@
+# Reproduce the runner's filesystem, on a machine that is not one.
+#
+# The suite normally bind-mounts testroot from the host. On macOS, Docker
+# Desktop remaps ownership across that mount, so a container writing as
+# any uid can write to it — which hides an entire class of fault. On
+# Linux, and therefore in CI, ownership is real and a mismatched uid gets
+# "550 Permission denied" on every write while every read still works.
+#
+# This override puts testroot on a Linux-native volume instead, so the
+# ownership the servers meet is the ownership they would meet in CI.
+#
+# Used by `./scripts/test-servers.sh ci`, which seeds the volume and
+# picks the uid. Not useful on its own.
+services:
+  pure-ftpd:
+    volumes:
+      - goftp-testroot-linux:/testroot
+  pure-ftpd-implicittls:
+    volumes:
+      - goftp-testroot-linux:/testroot
+  proftpd:
+    volumes:
+      - goftp-testroot-linux:/testroot
+  tests:
+    volumes:
+      - ../:/src
+      # Mounted where the suite looks for it, so the tests and the
+      # servers are describing the same directory.
+      - goftp-testroot-linux:/src/testroot
+
+volumes:
+  goftp-testroot-linux:
+    external: true
