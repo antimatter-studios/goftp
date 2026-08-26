@@ -47,6 +47,7 @@ func TestExplicitTLS(t *testing.T) {
 				InsecureSkipVerify: true,
 			},
 			TLSMode: TLSExplicit,
+			Timeout: testTimeout,
 		}
 
 		c, err := DialConfig(config, addr)
@@ -72,12 +73,15 @@ func TestExplicitTLS(t *testing.T) {
 
 func TestImplicitTLS(t *testing.T) {
 	requireServers(t)
-	closer, err := startPureFTPD(implicitTLSAddrs, "ftpd/pure-ftpd-implicittls")
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	defer closer()
+	// A separate server, because implicit TLS is a compile-time option
+	// in pure-ftpd rather than a runtime one — so it is a different
+	// binary on a different port, not a flag.
+	for _, addr := range implicitTLSAddrs {
+		if !listening(addr) {
+			t.Skipf("no implicit-TLS server on %s; start them with ./scripts/test-servers.sh up", addr)
+		}
+	}
 
 	for _, addr := range implicitTLSAddrs {
 		config := Config{
@@ -85,6 +89,7 @@ func TestImplicitTLS(t *testing.T) {
 				InsecureSkipVerify: true,
 			},
 			TLSMode: TLSImplicit,
+			Timeout: testTimeout,
 		}
 
 		c, err := DialConfig(config, addr)
@@ -114,6 +119,7 @@ func TestPooling(t *testing.T) {
 		ConnectionsPerHost: 2,
 		User:               "goftp",
 		Password:           "rocks",
+		Timeout:            testTimeout,
 	}
 	c, err := DialConfig(config, ftpdAddrs...)
 	if err != nil {
