@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"sync/atomic"
 
-	"github.com/secsy/goftp"
+	"github.com/antimatter-studios/goftp"
 )
 
 // Just for fun, walk an ftp server in parallel. I make no claim that this is
