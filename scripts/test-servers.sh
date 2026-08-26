@@ -3,6 +3,7 @@
 # test-servers.sh — the FTP servers the test suite runs against.
 #
 #   ./scripts/test-servers.sh test    run the suite against them
+#   ./scripts/test-servers.sh ci      run it as the CI runner would
 #   ./scripts/test-servers.sh up      start them and leave them running
 #   ./scripts/test-servers.sh down    stop them
 #   ./scripts/test-servers.sh logs    show what they are saying
@@ -65,9 +66,40 @@ case "${1:-test}" in
         ;;
     down)
         docker compose -f "$compose" --profile test down -v
+        # The CI-reproduction volume is declared external, so compose
+        # will not remove it and it would otherwise outlive the servers
+        # that used it.
+        docker volume rm -f goftp-testroot-linux >/dev/null 2>&1 || true
         ;;
     logs)
         docker compose -f "$compose" logs "${@:2}"
+        ;;
+    ci)
+        # What CI sees, on a machine that is not CI.
+        #
+        # macOS remaps ownership across a bind mount, so a container can
+        # write to testroot whatever uid it runs as. Linux does not, and
+        # a mismatch there refuses every write while allowing every read
+        # — which looks like a protocol fault rather than a permissions
+        # one, and cost an afternoon once.
+        #
+        # So testroot goes on a Linux-native volume owned by a uid that
+        # is deliberately not this machine's.
+        ci_uid="${CI_UID:-1001}"
+        echo "Reproducing a runner: testroot owned by uid $ci_uid"
+
+        docker volume rm -f goftp-testroot-linux >/dev/null 2>&1 || true
+        docker volume create goftp-testroot-linux >/dev/null
+        docker run --rm \
+            -v "$repo/testroot":/src:ro \
+            -v goftp-testroot-linux:/dst \
+            alpine:3 sh -c "cp -a /src/. /dst/ && chown -R $ci_uid:$ci_uid /dst"
+
+        FTP_UID="$ci_uid" GO_VERSION="$(go_version)" docker compose \
+            -f "$compose" -f "$repo/test-servers/compose.ci.yaml" up -d --build
+        FTP_UID="$ci_uid" GO_VERSION="$(go_version)" docker compose \
+            -f "$compose" -f "$repo/test-servers/compose.ci.yaml" --profile test \
+            run --rm tests go test "${@:2}" ./...
         ;;
     test)
         GO_VERSION="$(go_version)" docker compose -f "$compose" up -d --build
